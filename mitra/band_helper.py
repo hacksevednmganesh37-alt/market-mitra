@@ -66,10 +66,8 @@ def write_config_from_env() -> None:
         CONFIG.write_text(yaml.safe_dump(config))
 
 
-def run_agent(config_key: str, handler: Handler) -> None:
-    import asyncio
-
-    configure_logging(logging.INFO)
+async def serve_agent(config_key: str, handler: Handler) -> None:
+    """Connect one agent to BAND and keep handling its messages (runs until cancelled)."""
     write_config_from_env()
     if not CONFIG.exists():
         raise SystemExit(
@@ -105,12 +103,17 @@ def run_agent(config_key: str, handler: Handler) -> None:
         graph.add_edge("on_message", END)
         return graph.compile(checkpointer=checkpointer)
 
-    async def main() -> None:
-        adapter = LangGraphAdapter(graph_factory=graph_factory)
-        agent = Agent.from_config(config_key, adapter=adapter)
-        await agent.run()
+    adapter = LangGraphAdapter(graph_factory=graph_factory)
+    agent = Agent.from_config(config_key, adapter=adapter)
+    await agent.run()
 
-    asyncio.run(main())
+
+def run_agent(config_key: str, handler: Handler) -> None:
+    """Run one agent as its own process (used by scripts/start_all.sh)."""
+    import asyncio
+
+    configure_logging(logging.INFO)
+    asyncio.run(serve_agent(config_key, handler))
 
 
 def parse_command(text: str) -> dict:
