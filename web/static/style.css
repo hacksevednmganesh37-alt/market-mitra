@@ -125,3 +125,4 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .finch b { display: block; margin-bottom: 4px; }
 .finch span { font-size: 13px; color: var(--muted); }
 .finch small { color: var(--blue); font-size: 11px; letter-spacing: .04em; }
+td.news a { color: var(--blue); font-size: 12px; text-decoration: none; white-space: nowrap; }

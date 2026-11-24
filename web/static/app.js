@@ -151,6 +151,17 @@ async function poll(id) {
   timer = setTimeout(() => poll(id), 2000);
 }
 
+function newsCell(a) {
+  const td = make("td", "news", `${a.news_sentiment > 0 ? "▲" : a.news_sentiment < 0 ? "▼" : "•"} ${a.news_reason}`);
+  const h = (a.headlines || [])[0];
+  if (h && h.url) {
+    const link = make("a", "", ` ${h.source || "source"} ↗`);
+    link.href = h.url; link.target = "_blank"; link.rel = "noopener";
+    td.append(link);
+  }
+  return td;
+}
+
 function render(run) {
   const res = run.result, ins = res.insights, sc = res.scorecard, cur = ins.currency;
   $("result").hidden = false;
@@ -205,7 +216,7 @@ function render(run) {
     const score = make("td"); score.append(make("span", `score ${a.view}`, a.score > 0 ? `+${a.score}` : a.score));
     tr.append(name, make("td", "", money(cur, a.price, priceDp(a.price))),
       make("td", tone(a.change_1d), signed(a.change_1d)), make("td", tone(a.change_20d), signed(a.change_20d)),
-      make("td", "", a.rsi), spark, make("td", "news", `${a.news_sentiment > 0 ? "▲" : a.news_sentiment < 0 ? "▼" : "•"} ${a.news_reason}`), score);
+      make("td", "", a.rsi), spark, newsCell(a), score);
     $("r-insights").append(tr);
   }
   $("r-sources").innerHTML = "";
@@ -295,6 +306,7 @@ function renderReplay(rp) {
     head.append(make("span", "", d.date), ret);
     box.append(head);
     const ul = make("ul");
+    const taught = new Set();  // show each lesson once per day
     if (!d.decisions.length) ul.append(make("li", "hint small", `No trades. Best idea was ${short(d.top_idea.ticker)} (score ${d.top_idea.score}) - not strong enough.`));
     for (const x of d.decisions) {
       const li = make("li");
@@ -302,7 +314,7 @@ function renderReplay(rp) {
         `${x.action} ${x.qty} ${short(x.ticker)} @ ${money(cur, x.price, priceDp(x.price))}`;
       li.append(make("b", x.status === "vetoed" ? "down" : x.action === "BUY" ? "up" : "", label), document.createTextNode(" — "));
       li.append(document.createTextNode(x.veto ? `Risk rule: ${x.veto}` : (x.reason || "")));
-      if (x.lesson) li.append(make("div", "lesson", `📘 ${x.lesson}`));
+      if (x.lesson && !taught.has(x.lesson)) { li.append(make("div", "lesson", `📘 ${x.lesson}`)); taught.add(x.lesson); }
       ul.append(li);
     }
     box.append(ul);
