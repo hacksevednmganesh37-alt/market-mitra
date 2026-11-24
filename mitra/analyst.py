@@ -1,5 +1,6 @@
 """ANALYST work: prices + indicators + live news sentiment -> ranked opportunities."""
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from mitra import finch, gemini, market, store
 
@@ -23,15 +24,18 @@ Return JSON: {{"assets": [{{"ticker": "SAME TICKER AS GIVEN", "bull": "...", "be
 "conviction": 0.5}}]}}"""
 
 
-def gather_headlines(tickers: list[str], n: int = 4) -> dict[str, list[dict]]:
-    out = {}
-    for t in tickers:
-        try:
-            out[t] = market.headlines(t, n)
-        except Exception as err:
-            logging.warning("headlines failed for %s: %s", t, err)
-            out[t] = []
-    return out
+def _safe_headlines(t: str, n: int) -> list[dict]:
+    try:
+        return market.headlines(t, n)
+    except Exception as err:
+        logging.warning("headlines failed for %s: %s", t, err)
+        return []
+
+
+def gather_headlines(tickers: list[str], n: int = 3) -> dict[str, list[dict]]:
+    """Fetch every asset's headlines at the same time (much faster than one by one)."""
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        return dict(zip(tickers, pool.map(lambda t: _safe_headlines(t, n), tickers)))
 
 
 def headline_text(news_by_ticker: dict[str, list[dict]]) -> str:
@@ -59,7 +63,8 @@ def news(market_code: str, tickers: list[str]) -> tuple[dict, list[dict], dict]:
     if not any(by_ticker.values()):
         return {}, [], by_ticker
     try:
-        data = gemini.ask_json(NEWS_PROMPT.format(market_name=cfg["name"], headlines=headline_text(by_ticker)))
+        data = gemini.ask_json(NEWS_PROMPT.format(market_name=cfg["name"], headlines=headline_text(by_ticker)),
+                               fast=True)
     except Exception as err:  # quota / network: keep going with technicals + raw headlines
         logging.warning("news check failed: %s", err)
         data = {}
@@ -68,13 +73,20 @@ def news(market_code: str, tickers: list[str]) -> tuple[dict, list[dict], dict]:
 
 def analyse(market_code: str, tickers: list[str], req_id: str) -> dict:
     cfg = market.MARKETS[market_code]
-    rows, failed = [], []
-    for t in tickers:
+    def safe_tech(t):
         try:
-            rows.append(market.technicals(t))
+            return market.technicals(t)
         except Exception as err:
             logging.warning("price data failed for %s: %s", t, err)
-            failed.append(t)
+            return None
+
+    # prices for every asset + the benchmark + the Finch marketplace search, all at the same time
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        finch_job = pool.submit(finch.discover, market_code)
+        bench_job = pool.submit(safe_tech, cfg["benchmark"])
+        techs = list(pool.map(safe_tech, tickers))
+    rows = [r for r in techs if r]
+    failed = [t for t, r in zip(tickers, techs) if not r]
     if not rows:
         raise RuntimeError("Could not load prices for any of the selected assets.")
 
@@ -97,19 +109,16 @@ def analyse(market_code: str, tickers: list[str], req_id: str) -> dict:
         r["view"] = "Bullish" if r["score"] >= 25 else "Bearish" if r["score"] <= -25 else "Neutral"
     rows.sort(key=lambda r: -r["score"])
 
-    try:
-        bench = market.technicals(cfg["benchmark"])
-        benchmark = {"ticker": cfg["benchmark"], "name": cfg["benchmark_name"], "price": bench["price"],
-                     "change_1d": bench["change_1d"], "change_20d": bench["change_20d"]}
-    except Exception as err:
-        logging.warning("benchmark failed: %s", err)
-        benchmark = {"ticker": cfg["benchmark"], "name": cfg["benchmark_name"]}
+    bench = bench_job.result()
+    benchmark = {"ticker": cfg["benchmark"], "name": cfg["benchmark_name"]}
+    if bench:
+        benchmark.update(price=bench["price"], change_1d=bench["change_1d"], change_20d=bench["change_20d"])
 
     insights = {
         "req": req_id, "market": market_code, "market_name": cfg["name"], "currency": cfg["currency"],
         "created": store.now(), "assets": rows, "failed": failed, "benchmark": benchmark,
         "market_mood": str(news_data.get("market_mood", "") or ""), "sources": sources[:6], "deep_dive": {},
-        "finch": finch.discover(market_code),  # sponsor: related agents/skills on the Finch marketplace
+        "finch": finch_job.result(),  # sponsor: related agents/skills on the Finch marketplace
     }
     store.write_json(insights_path(req_id), insights)
     return insights
@@ -129,7 +138,7 @@ def deep_dive(req_id: str, tickers: list[str]) -> dict:
     try:
         data = gemini.ask_json(DEEP_PROMPT.format(
             tickers=", ".join(tickers), market_name=insights["market_name"], context=context,
-            headlines=headline_text(heads)))
+            headlines=headline_text(heads)), fast=True)
     except Exception as err:
         logging.warning("deep dive failed: %s", err)
         data = {}

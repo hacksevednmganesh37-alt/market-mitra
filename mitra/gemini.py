@@ -34,10 +34,16 @@ def client() -> genai.Client:
     return _client
 
 
-def generate(contents, config):
-    """generate_content with model fallback when a model's quota is used up."""
+FAST_MODELS = [m for m in FALLBACKS if "lite" in m]  # quicker models for simple reading/scoring jobs
+
+
+def generate(contents, config, fast: bool = False):
+    """generate_content with model fallback when a model's quota is used up.
+
+    fast=True tries the quicker 'lite' models first (used for scoring headlines and short summaries)."""
     kind = "search" if getattr(config, "tools", None) else "plain"  # search calls have their own quota
-    models = [m for m in dict.fromkeys([MODEL, *FALLBACKS])
+    order = [*FAST_MODELS, MODEL, *FALLBACKS] if fast else [MODEL, *FALLBACKS]
+    models = [m for m in dict.fromkeys(order)
               if time.time() - _exhausted.get((m, kind), 0) > 15 * 60] or [MODEL]
     last_err = None
     for model in models:
@@ -57,13 +63,13 @@ def upload(path: str):
     return client().files.upload(file=path)
 
 
-def ask_json(prompt: str, files: list | None = None) -> dict | list:
+def ask_json(prompt: str, files: list | None = None, fast: bool = False) -> dict | list:
     """Ask Gemini and get JSON back."""
     contents = [*(files or []), prompt]
     resp = generate(contents, types.GenerateContentConfig(
         response_mime_type="application/json",
         temperature=0.2,
-    ))
+    ), fast=fast)
     return json.loads(resp.text)
 
 
