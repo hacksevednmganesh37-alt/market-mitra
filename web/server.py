@@ -12,6 +12,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -30,7 +31,47 @@ ANALYST_ID = os.environ.get("MITRA_ANALYST_ID", "")
 DESK_KEY = os.environ.get("MITRA_DESK_KEY") or os.environ.get("MITRA_TRADER_KEY", "")
 BAND_BASES = [b for b in [os.environ.get("BAND_API_URL"), "https://api.band.ai/api/v1", "https://app.band.ai/api/v1"] if b]
 
-app = FastAPI(title="Market Mitra")
+# On a single-container host (Render, Hugging Face...) set AGENTS_IN_PROCESS=1 to run the
+# Market Analyst and Market Trader inside this web process: one process uses far less memory.
+AGENTS_IN_PROCESS = os.environ.get("AGENTS_IN_PROCESS") == "1"
+AGENT_STATUS: dict[str, str] = {}
+
+
+async def keep_agent_running(name: str, module: str) -> None:
+    import asyncio
+    import importlib
+    import logging
+
+    from mitra.band_helper import serve_agent
+
+    handler = importlib.import_module(module).handle
+    while True:
+        AGENT_STATUS[name] = "running"
+        try:
+            await serve_agent(name, handler)
+            AGENT_STATUS[name] = "stopped, restarting"
+        except asyncio.CancelledError:
+            raise
+        except BaseException as err:  # includes SystemExit from a missing config
+            logging.exception("%s agent crashed", name)
+            AGENT_STATUS[name] = f"error: {err!r}"[:200]
+        await asyncio.sleep(5)
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    import asyncio
+
+    tasks = []
+    if AGENTS_IN_PROCESS:
+        tasks = [asyncio.create_task(keep_agent_running("analyst", "agents.analyst_agent")),
+                 asyncio.create_task(keep_agent_running("trader", "agents.trader_agent"))]
+    yield
+    for t in tasks:
+        t.cancel()
+
+
+app = FastAPI(title="Market Mitra", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -134,4 +175,5 @@ def reset_portfolio(market_code: str, body: ResetRequest):
 @app.get("/api/health")
 def health():
     return {"ok": True, "room": ROOM_ID, "analyst": ANALYST_NAME, "analyst_id_set": bool(ANALYST_ID),
-            "poster_key_set": bool(DESK_KEY)}
+            "poster_key_set": bool(DESK_KEY), "agents_in_process": AGENTS_IN_PROCESS,
+            "agents": AGENT_STATUS}
