@@ -36,10 +36,14 @@ async def finish(req: str, request: dict, insights: dict, plan: dict, send) -> N
     checked = trader.risk_check(plan, insights, p, request["risk"])
     vetoed = [d for d in checked if d["status"] == "vetoed"]
     approved = [d for d in checked if d["status"] == "approved"]
-    store.log_message(req, "Risk rules", TRADER_NAME,
-                      f"Checked {len(approved) + len(vetoed)} trade ideas against {request['risk']} risk limits: "
-                      f"{len(approved)} approved, {len(vetoed)} vetoed"
-                      + (f" ({'; '.join(d['ticker'] + ': ' + d['veto'] for d in vetoed[:3])})" if vetoed else "") + ".")
+    if approved or vetoed:
+        store.log_message(req, "Risk rules", TRADER_NAME,
+                          f"Checked {len(approved) + len(vetoed)} trade ideas against {request['risk']} risk limits: "
+                          f"{len(approved)} approved, {len(vetoed)} vetoed"
+                          + (f" ({'; '.join(d['ticker'] + ': ' + d['veto'] for d in vetoed[:3])})" if vetoed else "") + ".")
+    else:
+        store.log_message(req, "Risk rules", TRADER_NAME,
+                          "No trade idea was strong enough today, so nothing to check. Holding cash is a decision too.")
     done += trader.execute(p, checked, req)
     p["history"].append({"time": store.now(), "equity": portfolio.equity(p, prices), "benchmark": bench_price})
     portfolio.save(p)
