@@ -30,7 +30,12 @@ def client() -> genai.Client:
                 "GEMINI_API_KEY is not set. Add it as a Codespaces secret "
                 "(get a key at aistudio.google.com/apikey)."
             )
-        _client = genai.Client(api_key=key, http_options=types.HttpOptions(api_version="v1beta"))
+        try:  # never hang: 45 s per request, no hidden retries (we fall back to the next model instead)
+            opts = types.HttpOptions(api_version="v1beta", timeout=45_000,
+                                     retry_options=types.HttpRetryOptions(attempts=1))
+        except Exception:  # older google-genai without these options
+            opts = types.HttpOptions(api_version="v1beta", timeout=45_000)
+        _client = genai.Client(api_key=key, http_options=opts)
     return _client
 
 
@@ -46,16 +51,24 @@ def generate(contents, config, fast: bool = False):
     models = [m for m in dict.fromkeys(order)
               if time.time() - _exhausted.get((m, kind), 0) > 15 * 60] or [MODEL]
     last_err = None
+    started = time.time()
     for model in models:
+        if time.time() - started > 90:  # don't keep a learner waiting: callers fall back to rules
+            break
         try:
             return client().models.generate_content(model=model, contents=contents, config=config)
-        except genai_errors.APIError as err:  # 429 quota, 404 retired model, 5xx overloaded
+        except Exception as err:
+            if not isinstance(err, genai_errors.APIError):  # timeout / network: try the next model
+                logging.warning("Gemini model %s failed (%s), trying the next one", model, err)
+                last_err = err
+                continue
+            # 429 quota, 404 retired model, 5xx overloaded
             if getattr(err, "code", None) not in (429, 404, 500, 503):
                 raise
             logging.warning("Gemini model %s unavailable (%s), trying the next one", model, err.code)
             _exhausted[(model, kind)] = time.time()
             last_err = err
-    raise last_err
+    raise last_err or TimeoutError("Gemini took too long")
 
 
 def upload(path: str):
