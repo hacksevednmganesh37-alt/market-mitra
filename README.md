@@ -75,6 +75,8 @@ Open positions are closed automatically when their stop-loss or target is hit.
 - **BAND**: agent-to-agent messaging (`band-sdk`, LangGraph adapter; REST API for the web app)
 - **Gemini API** (`gemini-3.5-flash` with automatic fallback): news sentiment with Google Search grounding, trade decisions, deep dives
 - **Yahoo Finance** (`yfinance`): daily prices for NSE, US stocks, crypto and the benchmarks
+- **Finch** (finchtech.ai): the Analyst searches Finch's agent & skill marketplace (public read API, no wallet) and shows
+  specialised agents/skills for the market being studied, so learners can see where to go deeper
 - **FastAPI**: the Mitra Desk web app (`web/`)
 - **GitHub Codespaces**: runs the agents and the web app
 
@@ -96,6 +98,7 @@ mitra/trader.py           decisions, risk rules, simulated execution
 mitra/portfolio.py        paper portfolio + scorecard
 mitra/replay.py           replay the last N trading days
 mitra/lessons.py          beginner lessons attached to decisions
+mitra/finch.py            Finch marketplace discovery (sponsor integration)
 mitra/band_helper.py      BAND connection
 web/                      Mitra Desk web app
 ```
