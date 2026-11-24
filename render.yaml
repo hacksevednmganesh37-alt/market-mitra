@@ -1,0 +1,26 @@
+# Render Blueprint for Market Mitra (free web service, no Docker needed).
+# The Market Analyst and Market Trader run inside the web process (AGENTS_IN_PROCESS=1).
+# Render asks you to paste the secret values (sync: false) when you create the Blueprint.
+services:
+  - type: web
+    name: market-mitra
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn web.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: AGENTS_IN_PROCESS
+        value: "1"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MITRA_ANALYST_ID
+        sync: false
+      - key: MITRA_ANALYST_KEY
+        sync: false
+      - key: MITRA_TRADER_ID
+        sync: false
+      - key: MITRA_TRADER_KEY
+        sync: false

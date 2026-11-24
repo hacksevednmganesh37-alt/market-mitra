@@ -1,0 +1,7 @@
+band-sdk[langgraph]==9.1.0
+google-genai>=1.0.0
+pyyaml>=6.0
+fastapi>=0.110
+uvicorn>=0.29
+yfinance>=0.2.40
+pandas>=2.0
