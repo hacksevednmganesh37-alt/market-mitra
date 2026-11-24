@@ -62,8 +62,8 @@ def generate(contents, config, fast: bool = False):
                 logging.warning("Gemini model %s failed (%s), trying the next one", model, err)
                 last_err = err
                 continue
-            # 429 quota, 404 retired model, 5xx overloaded
-            if getattr(err, "code", None) not in (429, 404, 500, 503):
+            # 429 quota, 404 retired model, 5xx overloaded or deadline exceeded
+            if getattr(err, "code", None) not in (429, 404, 500, 502, 503, 504):
                 raise
             logging.warning("Gemini model %s unavailable (%s), trying the next one", model, err.code)
             _exhausted[(model, kind)] = time.time()
