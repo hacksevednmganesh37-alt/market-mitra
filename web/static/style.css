@@ -117,3 +117,11 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .day li { margin: 6px 0; }
 .lesson { font-size: 12px; color: #c9b47a; margin-top: 3px; }
 .dec .lesson { margin-top: 8px; }
+
+.finch { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.finch a { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #0f161e;
+  color: var(--text); text-decoration: none; }
+.finch a:hover { border-color: var(--blue); }
+.finch b { display: block; margin-bottom: 4px; }
+.finch span { font-size: 13px; color: var(--muted); }
+.finch small { color: var(--blue); font-size: 11px; letter-spacing: .04em; }

@@ -217,6 +217,16 @@ function render(run) {
     $("r-sources").append(a);
   });
 
+  const fin = ins.finch || {};
+  const items = [...(fin.agents || []).map(x => ({ ...x, kind: "AGENT" })), ...(fin.skills || []).map(x => ({ ...x, kind: "SKILL" }))];
+  $("finch-card").hidden = !items.length;
+  $("r-finch").innerHTML = "";
+  for (const it of items) {
+    const a = make("a"); a.href = it.url; a.target = "_blank"; a.rel = "noopener";
+    a.append(make("small", "", `FINCH ${it.kind}`), make("b", "", it.name || "Untitled"), make("span", "", it.summary || ""));
+    $("r-finch").append(a);
+  }
+
   $("r-positions").innerHTML = "";
   if (!sc.positions.length) {
     const tr = make("tr"); const td = make("td", "hint", "No open positions yet."); td.colSpan = 7; tr.append(td);
