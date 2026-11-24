@@ -3,35 +3,67 @@ import logging
 
 from mitra import finch, gemini, market, store
 
-NEWS_PROMPT = """You are a market analyst. Search the web for the most recent news (last 7 days) about each of
-these {market_name} assets: {tickers}.
-For each one give a news sentiment score from -1 (very negative) to +1 (very positive),
-one short headline-style reason (max 20 words), and any big upcoming event (results, launch, policy) or "".
-Also give one sentence on the overall market mood today.
+NEWS_PROMPT = """You are a market analyst. Below are the latest news headlines for some {market_name} assets.
+For each asset give a news sentiment score from -1 (very negative) to +1 (very positive) based ONLY on these headlines,
+one short reason a beginner understands (max 20 words), and any big upcoming event mentioned (results, launch, policy) or "".
+If an asset has no relevant headline, give 0 and say "No major news.".
+Also give one sentence on the overall mood across these headlines.
+{headlines}
 Return JSON: {{"market_mood": "...", "assets": [{{"ticker": "SAME TICKER AS GIVEN", "sentiment": 0.3,
 "reason": "...", "event": "..."}}]}}"""
 
 DEEP_PROMPT = """You are a careful equity/crypto research analyst. The trader is unsure about: {tickers}
-({market_name}). For each, search the latest news and give: the bull case (1 sentence), the bear case (1 sentence),
-key risk in the next 2 weeks (1 sentence), and your conviction to BUY now from 0 to 1.
+({market_name}). Using the technical context and the recent headlines below, give for each: the bull case
+(1 sentence), the bear case (1 sentence), the key risk in the next 2 weeks (1 sentence), and your conviction to BUY now
+from 0 to 1.
 Technical context: {context}
+Headlines:
+{headlines}
 Return JSON: {{"assets": [{{"ticker": "SAME TICKER AS GIVEN", "bull": "...", "bear": "...", "risk": "...",
 "conviction": 0.5}}]}}"""
+
+
+def gather_headlines(tickers: list[str], n: int = 4) -> dict[str, list[dict]]:
+    out = {}
+    for t in tickers:
+        try:
+            out[t] = market.headlines(t, n)
+        except Exception as err:
+            logging.warning("headlines failed for %s: %s", t, err)
+            out[t] = []
+    return out
+
+
+def headline_text(news_by_ticker: dict[str, list[dict]]) -> str:
+    lines = []
+    for t, items in news_by_ticker.items():
+        lines.append(f"{t}:")
+        for h in items or []:
+            lines.append(f"  - [{h.get('date', '')}] {h['title']} ({h.get('source') or 'news'})"
+                         + (f": {h['summary'][:160]}" if h.get("summary") else ""))
+        if not items:
+            lines.append("  - (no recent headlines)")
+    return "\n".join(lines)
 
 
 def insights_path(req_id: str):
     return store.WORK / "insights" / f"{req_id}.json"
 
 
-def news(market_code: str, tickers: list[str]) -> tuple[dict, list[dict]]:
+def news(market_code: str, tickers: list[str]) -> tuple[dict, list[dict], dict]:
+    """Yahoo Finance headlines -> Gemini reads them and scores sentiment per asset."""
     cfg = market.MARKETS[market_code]
+    by_ticker = gather_headlines(tickers)
+    sources = [{"title": f"{h['title']} ({h.get('source') or 'news'})", "url": h["url"]}
+               for items in by_ticker.values() for h in items[:1] if h.get("url")]
+    if not any(by_ticker.values()):
+        return {}, [], by_ticker
     try:
-        data, sources = gemini.ask_web(NEWS_PROMPT.format(market_name=cfg["name"], tickers=", ".join(tickers)))
-    except Exception as err:  # quota / network: keep going with technicals only
+        data = gemini.ask_json(NEWS_PROMPT.format(market_name=cfg["name"], headlines=headline_text(by_ticker)))
+    except Exception as err:  # quota / network: keep going with technicals + raw headlines
         logging.warning("news check failed: %s", err)
-        return {}, []
-    data = data if isinstance(data, dict) else {}
-    return data, sources
+        data = {}
+    return (data if isinstance(data, dict) else {}), sources, by_ticker
 
 
 def analyse(market_code: str, tickers: list[str], req_id: str) -> dict:
@@ -46,16 +78,19 @@ def analyse(market_code: str, tickers: list[str], req_id: str) -> dict:
     if not rows:
         raise RuntimeError("Could not load prices for any of the selected assets.")
 
-    news_data, sources = news(market_code, [r["ticker"] for r in rows])
-    by_ticker = {str(a.get("ticker", "")).upper(): a for a in news_data.get("assets", []) if isinstance(a, dict)}
+    news_data, sources, by_ticker = news(market_code, [r["ticker"] for r in rows])
+    scored = {str(a.get("ticker", "")).upper(): a for a in news_data.get("assets", []) if isinstance(a, dict)}
     for r in rows:
-        n = by_ticker.get(r["ticker"].upper(), {})
+        n = scored.get(r["ticker"].upper(), {})
         try:
             sentiment = max(-1.0, min(1.0, float(n.get("sentiment", 0) or 0)))
         except (TypeError, ValueError):
             sentiment = 0.0
+        heads = by_ticker.get(r["ticker"]) or []
+        r["headlines"] = heads[:3]
         r["news_sentiment"] = round(sentiment, 2)
-        r["news_reason"] = str(n.get("reason", "") or ("No major news found." if n else "News check unavailable right now."))
+        r["news_reason"] = str(n.get("reason", "") or
+                               (f"Latest: {heads[0]['title']}" if heads else "No recent headlines found."))
         r["event"] = str(n.get("event", "") or "")
         # combined score: 60% price action, 40% news (price action only if there is no news read)
         r["score"] = round(0.6 * r["tech_score"] + 0.4 * sentiment * 100) if n else r["tech_score"]
@@ -89,12 +124,15 @@ def deep_dive(req_id: str, tickers: list[str]) -> dict:
     tickers = [t for t in tickers if t in rows]
     context = "; ".join(f"{t}: price {rows[t]['price']}, RSI {rows[t]['rsi']}, 20d {rows[t]['change_20d']}%, "
                         f"score {rows[t]['score']}" for t in tickers)
+    heads = {t: rows[t].get("headlines") or [] for t in tickers}
+    sources = []
     try:
-        data, sources = gemini.ask_web(DEEP_PROMPT.format(
-            tickers=", ".join(tickers), market_name=insights["market_name"], context=context))
+        data = gemini.ask_json(DEEP_PROMPT.format(
+            tickers=", ".join(tickers), market_name=insights["market_name"], context=context,
+            headlines=headline_text(heads)))
     except Exception as err:
         logging.warning("deep dive failed: %s", err)
-        data, sources = {}, []
+        data = {}
     found = {str(a.get("ticker", "")).upper(): a for a in (data or {}).get("assets", []) if isinstance(a, dict)} \
         if isinstance(data, dict) else {}
     for t in tickers:

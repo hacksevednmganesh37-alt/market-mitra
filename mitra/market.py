@@ -119,3 +119,36 @@ def technicals(ticker: str, df: pd.DataFrame | None = None) -> dict:
         "volume_ratio": round(vol_ratio, 2), "tech_score": round(score), "tech_notes": notes,
         "spark": [round(float(x), 4) for x in close.tail(30)],
     }
+
+
+def _field(d: dict, *keys):
+    for k in keys:
+        v = d.get(k)
+        if isinstance(v, dict):
+            v = v.get("url") or v.get("displayName")
+        if v:
+            return v
+    return None
+
+
+def headlines(ticker: str, n: int = 4) -> list[dict]:
+    """Latest news headlines for a ticker from Yahoo Finance (title, summary, source, link, date)."""
+    import yfinance as yf
+
+    out = []
+    for item in (yf.Ticker(ticker).news or [])[: n * 2]:
+        c = item.get("content", item) if isinstance(item, dict) else {}
+        title = (c.get("title") or "").strip()
+        if not title:
+            continue
+        provider = c.get("provider") or {}
+        out.append({
+            "title": title,
+            "summary": " ".join(str(c.get("summary") or "").split())[:300],
+            "source": provider.get("displayName") if isinstance(provider, dict) else c.get("publisher"),
+            "url": _field(c, "clickThroughUrl", "canonicalUrl", "link"),
+            "date": str(c.get("pubDate") or c.get("providerPublishTime") or "")[:10],
+        })
+        if len(out) >= n:
+            break
+    return out

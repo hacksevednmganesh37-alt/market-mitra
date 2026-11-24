@@ -16,7 +16,7 @@ MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 FALLBACKS = [m.strip() for m in os.environ.get(
     "GEMINI_FALLBACK_MODELS",
     "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest,gemini-2.5-flash").split(",") if m.strip()]
-_exhausted: dict[str, float] = {}   # model -> time it ran out (skip it for a while)
+_exhausted: dict[tuple, float] = {}   # (model, kind) -> time it ran out (skip it for a while)
 
 _client = None
 
@@ -36,8 +36,9 @@ def client() -> genai.Client:
 
 def generate(contents, config):
     """generate_content with model fallback when a model's quota is used up."""
+    kind = "search" if getattr(config, "tools", None) else "plain"  # search calls have their own quota
     models = [m for m in dict.fromkeys([MODEL, *FALLBACKS])
-              if time.time() - _exhausted.get(m, 0) > 15 * 60] or [MODEL]
+              if time.time() - _exhausted.get((m, kind), 0) > 15 * 60] or [MODEL]
     last_err = None
     for model in models:
         try:
@@ -46,7 +47,7 @@ def generate(contents, config):
             if getattr(err, "code", None) not in (429, 404, 500, 503):
                 raise
             logging.warning("Gemini model %s unavailable (%s), trying the next one", model, err.code)
-            _exhausted[model] = time.time()
+            _exhausted[(model, kind)] = time.time()
             last_err = err
     raise last_err
 
