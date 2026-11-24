@@ -85,7 +85,11 @@ async def handle(sender: str, text: str, send) -> None:
                 store.log_message(req, TRADER_NAME, "portfolio",
                                   f"Reviewing {len(insights['assets'])} ideas against my portfolio "
                                   f"({len(p['positions'])} open positions, {request['risk']} risk).")
-                plan = await asyncio.to_thread(trader.decide, insights, p, request["risk"])
+                try:  # never leave the learner waiting: fall back to the rule-based trader
+                    plan = await asyncio.wait_for(
+                        asyncio.to_thread(trader.decide, insights, p, request["risk"]), timeout=150)
+                except asyncio.TimeoutError:
+                    plan = trader.rule_based(insights, p)
                 store.write_json(plan_path(req), plan)
                 if plan["unsure"]:
                     # Agent-to-agent step: the Trader asks the Analyst for a deeper look before risking money.
