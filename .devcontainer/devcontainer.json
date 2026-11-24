@@ -1,0 +1,13 @@
+{
+  "name": "Market Mitra",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postCreateCommand": "pip install uv && uv sync",
+  "customizations": { "vscode": { "extensions": ["ms-python.python"] } },
+  "secrets": {
+    "GEMINI_API_KEY": { "description": "Gemini API key from aistudio.google.com/apikey" },
+    "MITRA_ANALYST_ID": { "description": "BAND agent ID for the Market Analyst" },
+    "MITRA_ANALYST_KEY": { "description": "BAND agent API key for the Market Analyst" },
+    "MITRA_TRADER_ID": { "description": "BAND agent ID for the Market Trader" },
+    "MITRA_TRADER_KEY": { "description": "BAND agent API key for the Market Trader" }
+  }
+}
