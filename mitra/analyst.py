@@ -1,7 +1,7 @@
 """ANALYST work: prices + indicators + live news sentiment -> ranked opportunities."""
 import logging
 
-from mitra import gemini, market, store
+from mitra import finch, gemini, market, store
 
 NEWS_PROMPT = """You are a market analyst. Search the web for the most recent news (last 7 days) about each of
 these {market_name} assets: {tickers}.
@@ -74,6 +74,7 @@ def analyse(market_code: str, tickers: list[str], req_id: str) -> dict:
         "req": req_id, "market": market_code, "market_name": cfg["name"], "currency": cfg["currency"],
         "created": store.now(), "assets": rows, "failed": failed, "benchmark": benchmark,
         "market_mood": str(news_data.get("market_mood", "") or ""), "sources": sources[:6], "deep_dive": {},
+        "finch": finch.discover(market_code),  # sponsor: related agents/skills on the Finch marketplace
     }
     store.write_json(insights_path(req_id), insights)
     return insights
