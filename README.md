@@ -7,6 +7,8 @@ then make **simulated (paper) trades** with hard risk rules, and track the resul
 
 Built for *Diwali Festiverse: The Agent-to-Agent Hackathon (India Edition)*, **Finance — Analyze & Trade** track.
 
+**Live demo: https://market-mitra-xnhr.onrender.com** (free hosting: if nobody has used it for 15 minutes, the first load takes about a minute while it wakes up)
+
 > Paper trading only. No real money, no broker connection. For learning, not investment advice.
 
 ## The problem
@@ -23,7 +25,7 @@ User picks a market (NSE / US / Crypto), assets and a risk level
 Mitra Desk (web app) ──@Market Analyst analyse market=IN req=…──▶ Market Analyst
                                                                     │ 6 months of prices (Yahoo Finance)
                                                                     │ RSI, 20/50-day averages, momentum, ATR, volume
-                                                                    │ live news sentiment (Gemini + Google Search)
+                                                                    │ latest news headlines, sentiment scored by Gemini
                                                                     ▼ ranks the opportunities
                                               INSIGHTS_READY ──▶ Market Trader
                                                                     │ decides BUY / SELL / HOLD with stop-loss + target
@@ -57,7 +59,7 @@ Open positions are closed automatically when their stop-loss or target is hit.
 
 ## Two ways to use it
 - **Live run**: the Analyst and Trader talk on BAND with today's prices and news (about 2 minutes). Trades go into a paper portfolio
-  (₹50,000 for NSE, $10,000 for US stocks and crypto) that keeps running between sessions.
+  (₹50,000 for NSE, $10,000 for US stocks and crypto). On the free demo host the portfolio starts fresh whenever the app restarts.
 - **⏪ Replay last 7 days**: the same scoring, trader rules and risk rules played day by day over the last 7 trading days with
   real past prices. A beginner sees a whole week of decisions, lessons and profit/loss vs the index in seconds.
 
@@ -73,15 +75,23 @@ Open positions are closed automatically when their stop-loss or target is hit.
 
 ## Tech
 - **BAND**: agent-to-agent messaging (`band-sdk`, LangGraph adapter; REST API for the web app)
-- **Gemini API** (`gemini-3.5-flash` with automatic fallback): news sentiment with Google Search grounding, trade decisions, deep dives
-- **Yahoo Finance** (`yfinance`): daily prices for NSE, US stocks, crypto and the benchmarks
+- **Gemini API** (`gemini-3.5-flash` with automatic fallback): news sentiment, trade decisions, deep dives
+- **Yahoo Finance** (`yfinance`): daily prices and news headlines for NSE, US stocks, crypto and the benchmarks
 - **Finch** (finchtech.ai): the Analyst searches Finch's agent & skill marketplace (public read API, no wallet) and shows
   specialised agents/skills for the market being studied, so learners can see where to go deeper
 - **FastAPI**: the Mitra Desk web app (`web/`)
-- **GitHub Codespaces**: runs the agents and the web app
+- **Render** (free web service): hosts the live demo; both agents run inside the web app process
+- **GitHub Codespaces**: development
 
 ## Run it
 
+### On Render (how the live demo runs)
+1. In Render choose **New → Blueprint** and point it at this repo (it reads `render.yaml`).
+2. Paste the 5 secrets when asked: `GEMINI_API_KEY`, `MITRA_ANALYST_ID`, `MITRA_ANALYST_KEY`, `MITRA_TRADER_ID`, `MITRA_TRADER_KEY`.
+3. Deploy. `AGENTS_IN_PROCESS=1` starts the Market Analyst and Market Trader inside the web app, so one free instance runs everything.
+   `/api/health` shows whether both agents are running.
+
+### In GitHub Codespaces
 1. Open this repo in **GitHub Codespaces**.
 2. Add **Codespaces secrets**: `GEMINI_API_KEY`, `MITRA_ANALYST_ID`, `MITRA_ANALYST_KEY`, `MITRA_TRADER_ID`, `MITRA_TRADER_KEY`
    (BAND agents named "Market Analyst" and "Market Trader", in the same room).
@@ -100,7 +110,9 @@ mitra/replay.py           replay the last N trading days
 mitra/lessons.py          beginner lessons attached to decisions
 mitra/finch.py            Finch marketplace discovery (sponsor integration)
 mitra/band_helper.py      BAND connection
+mitra/gemini.py           Gemini calls with timeouts + model fallback
 web/                      Mitra Desk web app
+render.yaml               Render deployment (free web service)
 ```
 
 ## Disclaimer
