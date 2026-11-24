@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Market Mitra - AI analyst + trader agents</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">₹</span>
+      <div>
+        <h1>Market Mitra</h1>
+        <p>An Analyst agent finds the opportunities. A Trader agent acts on them. Every trade explained.</p>
+      </div>
+    </div>
+    <span class="paper">PAPER TRADING · NO REAL MONEY</span>
+  </header>
+
+  <main>
+    <section class="card" id="form-card">
+      <h2>Run the agents</h2>
+      <p class="hint">The Market Analyst reads live prices, indicators and news. The Market Trader decides, then hard risk rules approve or veto each trade.</p>
+      <form id="run-form">
+        <fieldset>
+          <legend>Market</legend>
+          <div class="seg" id="markets"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Assets to analyse <button type="button" class="link" id="toggle-all">select none</button></legend>
+          <div class="chips" id="tickers"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Risk level</legend>
+          <div class="seg" id="risk">
+            <label><input type="radio" name="risk" value="low" />Low <small>max 10% per trade, tight stops</small></label>
+            <label><input type="radio" name="risk" value="medium" checked />Medium <small>max 20% per trade</small></label>
+            <label><input type="radio" name="risk" value="high" />High <small>max 30% per trade</small></label>
+          </div>
+        </fieldset>
+        <div class="buttons">
+          <button type="submit" id="go">Run the agents (live)</button>
+          <button type="button" id="replay-go" class="ghost">⏪ Replay last 7 days</button>
+        </div>
+        <p class="hint small">Live: the Analyst and Trader talk on BAND using today's prices and news (about 2 minutes).
+          Replay: the same scoring and risk rules played over the last 7 trading days with real past prices, in seconds.</p>
+        <p class="error" id="form-error" hidden></p>
+        <p class="hint small" id="capital-note"></p>
+      </form>
+    </section>
+
+    <section class="card" id="live-card" hidden>
+      <h2>Agents at work <span class="pulse" id="pulse"></span></h2>
+      <p class="hint">The real conversation between the agents in the BAND room.</p>
+      <ol class="log" id="log"></ol>
+    </section>
+
+    <section class="card" id="replay-card" hidden>
+      <p class="code" id="rp-market"></p>
+      <h2 id="rp-head"></h2>
+      <p class="meta" id="rp-meta"></p>
+      <div class="chart" id="rp-chart"></div>
+      <p class="legend"><span class="sw mine"></span> Market Mitra portfolio <span class="sw bench"></span> <span id="rp-bench-name">benchmark</span></p>
+      <h3>Day by day</h3>
+      <div id="rp-days"></div>
+      <p class="center"><button class="ghost" id="rp-back">Back</button></p>
+    </section>
+
+    <section id="result" hidden>
+      <section class="card hero">
+        <div>
+          <p class="code" id="r-market"></p>
+          <h2 id="r-equity"></h2>
+          <p class="meta" id="r-meta"></p>
+        </div>
+        <div class="stats">
+          <div><b id="r-return"></b><span>your portfolio</span></div>
+          <div><b id="r-bench"></b><span id="r-bench-name">benchmark</span></div>
+          <div><b id="r-open"></b><span>open positions</span></div>
+          <div><b id="r-win"></b><span>win rate</span></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Trader's decisions this run</h3>
+        <p class="hint">Approved trades were placed in the paper portfolio. Vetoed ones broke a risk rule.</p>
+        <div class="decisions" id="r-decisions"></div>
+      </section>
+
+      <section class="card">
+        <h3>Analyst's insights</h3>
+        <p class="hint" id="r-mood"></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Asset</th><th>Price</th><th>1 day</th><th>20 days</th><th>RSI</th><th>Trend (30d)</th><th>News</th><th>Score</th></tr></thead>
+            <tbody id="r-insights"></tbody>
+          </table>
+        </div>
+        <p class="sources" id="r-sources"></p>
+      </section>
+
+      <section class="card">
+        <h3>Open positions</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Asset</th><th>Qty</th><th>Bought at</th><th>Now</th><th>P&amp;L</th><th>Stop-loss</th><th>Target</th></tr></thead>
+            <tbody id="r-positions"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="center">
+        <button id="again" class="ghost">Run again</button>
+        <button id="reset" class="ghost danger">Reset this portfolio</button>
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    Built by Mitra Desk + Market Analyst + Market Trader talking on BAND, powered by Gemini and Yahoo Finance prices.
+    Simulated trades for learning only. Not investment advice.
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>
